@@ -412,6 +412,67 @@
   (-pr-writer [_ writer opts]
     (check (-pr-writer value writer opts))))
 
+(deftype SetCursor [value state path]
+  IWithMeta
+  (-with-meta [_ new-meta]
+    (check
+      (SetCursor. (with-meta value new-meta) state path)))
+  IMeta
+  (-meta [_] (check (meta value)))
+  IDeref
+  (-deref [this]
+    (if-not *read-enabled*
+      (get-in @state path)
+      (throw (js/Error. (str "Cannot deref cursor during render phase: " this)))))
+  IValue
+  (-value [_] value)
+  ICursor
+  (-path [_] path)
+  (-state [_] state)
+  ITransact
+  (-transact! [this korks f tag]
+    (transact* state this korks f tag))
+  ICloneable
+  (-clone [_]
+    (SetCursor. value state path))
+  ICounted
+  (-count [_]
+    (check (-count value)))
+  ICollection
+  (-conj [_ o]
+    (check (SetCursor. (-conj value o) state path)))
+  ILookup
+  (-lookup [this k]
+    (-lookup this k nil))
+  (-lookup [_ k not-found]
+    (check
+      (let [v (-lookup value k not-found)]
+        (if-not (= v not-found)
+          (to-cursor v state (conj path k))
+          not-found))))
+  IFn
+  (-invoke [this k]
+    (-lookup this k))
+  (-invoke [this k not-found]
+    (-lookup this k not-found))
+  ISeqable
+  (-seq [this]
+    (check
+      (when (pos? (count value))
+        (map #(to-cursor % state (conj path %)) value))))
+  ISet
+  (-disjoin [_ k]
+    (check (SetCursor. (-disjoin value k) state path)))
+  IEquiv
+  (-equiv [_ other]
+    (check
+      (if (cursor? other)
+        (= value (-value other))
+        (= value other))))
+  IPrintWithWriter
+  (-pr-writer [_ writer opts]
+    (check (-pr-writer value writer opts))))
+
 (deftype IndexedCursor [value state path]
   ISequential
   IDeref
@@ -514,6 +575,7 @@
       (satisfies? IToCursor val) (-to-cursor val state path)
       (indexed? val) (IndexedCursor. val state path)
       (map? val) (MapCursor. val state path)
+      (set? val) (SetCursor. val state path)
       (satisfies? ICloneable val) (to-cursor* val state path)
       :else val)))
 
