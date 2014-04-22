@@ -210,7 +210,7 @@
            (if (satisfies? IShouldUpdate c)
              (should-update c
                (get-props #js {:props next-props})
-               state)
+               (aget state "__om_state"))
              (cond
                (not (identical? (-value (aget props "__om_cursor"))
                                 (-value (aget next-props "__om_cursor"))))
